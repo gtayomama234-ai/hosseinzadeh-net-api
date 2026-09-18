@@ -10,7 +10,7 @@ export default {
       });
     }
 
-    if (url.pathname === "/news/iranintl") {
+        if (url.pathname === "/news/iranintl") {
       try {
         const response = await fetch("https://www.iranintl.com/en/latest");
 
@@ -29,6 +29,19 @@ export default {
         const articles = [];
         const seen = new Set();
 
+        function decodeHTML(text) {
+          return text
+            .replace(/&amp;/g, "&")
+            .replace(/&quot;/g, '"')
+            .replace(/&#x27;/gi, "'")
+            .replace(/&#39;/g, "'")
+            .replace(/&lt;/g, "<")
+            .replace(/&gt;/g, ">")
+            .replace(/&nbsp;/g, " ")
+            .replace(/&#x2F;/gi, "/")
+            .replace(/&#47;/g, "/");
+        }
+
         const linkRegex = /<a[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi;
 
         let match;
@@ -36,12 +49,14 @@ export default {
         while ((match = linkRegex.exec(html)) !== null) {
           let href = match[1];
 
-          let title = match[2]
+          let text = match[2]
             .replace(/<[^>]*>/g, " ")
             .replace(/\s+/g, " ")
             .trim();
 
-          if (!title || title.length < 15) {
+          text = decodeHTML(text);
+
+          if (!text || text.length < 15) {
             continue;
           }
 
@@ -57,10 +72,42 @@ export default {
             continue;
           }
 
+          const dateRegex =
+            /(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2},\s+\d{4},\s+\d{2}:\d{2}\s+GMT[+-]\d+/;
+
+          const dateMatch = text.match(dateRegex);
+
+          let published = null;
+          let articleText = text;
+
+          if (dateMatch) {
+            published = dateMatch[0];
+            articleText = text
+              .replace(dateRegex, "")
+              .replace(/\s+/g, " ")
+              .trim();
+          }
+
+          let title = articleText;
+          let description = null;
+
+          const sentenceEnd = articleText.search(/[.!?]\s+/);
+
+          if (sentenceEnd !== -1) {
+            title = articleText.slice(0, sentenceEnd + 1).trim();
+            description = articleText.slice(sentenceEnd + 1).trim();
+
+            if (!description) {
+              description = null;
+            }
+          }
+
           seen.add(href);
 
           articles.push({
             title,
+            description,
+            published,
             url: href
           });
 
