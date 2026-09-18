@@ -29,6 +29,18 @@ export default {
         const articles = [];
         const seen = new Set();
 
+        const debugMatch = html.match(
+          /<a[^>]+href="https:\/\/www\.iranintl\.com\/en\/2026[^"]*"[^>]*>[\s\S]{0,5000}<\/a>/i
+        );
+
+        if (debugMatch) {
+          return new Response(debugMatch[0], {
+            headers: {
+              "Content-Type": "text/html; charset=utf-8"
+            }
+          });
+        }
+
         function decodeHTML(text) {
           return text
             .replace(/&amp;/g, "&")
