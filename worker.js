@@ -6,7 +6,7 @@ export default {
       return Response.json({
         service: "Hosseinzadeh-Net",
         status: "online",
-        version: "2.2.0"
+        version: "2.3.0"
       });
     }
 
@@ -149,7 +149,7 @@ async function handleVOA(
         {
           headers: {
             "User-Agent":
-              "Hosseinzadeh-Net/2.2",
+              "Hosseinzadeh-Net/2.3",
             "Accept":
               "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
             "Accept-Language":
@@ -291,7 +291,7 @@ async function handleVOA(
                   {
                     headers: {
                       "User-Agent":
-                        "Hosseinzadeh-Net/2.2",
+                        "Hosseinzadeh-Net/2.3",
                       "Accept":
                         "text/html,application/xhtml+xml"
                     }
@@ -307,7 +307,9 @@ async function handleVOA(
                   language:
                     "fa",
                   title:
-                    article.title,
+                    cleanText(
+                      article.title
+                    ),
                   description:
                     null,
                   published:
@@ -360,7 +362,7 @@ async function handleVOA(
                   if (
                     result
                   ) {
-                    return cleanHTML(
+                    return cleanText(
                       result[1]
                     );
                   }
@@ -369,6 +371,190 @@ async function handleVOA(
                 return null;
               }
 
+
+              function getPublishedDate() {
+                const metaDate =
+                  getMeta(
+                    "article:published_time"
+                  ) ||
+                  getMeta(
+                    "datePublished"
+                  ) ||
+                  getMeta(
+                    "date"
+                  ) ||
+                  getMeta(
+                    "publishdate"
+                  ) ||
+                  getMeta(
+                    "pubdate"
+                  ) ||
+                  getMeta(
+                    "timestamp"
+                  );
+
+                if (
+                  metaDate
+                ) {
+                  return metaDate;
+                }
+
+
+                const timePatterns = [
+                  /<time[^>]+datetime=["']([^"']+)["'][^>]*>/i,
+                  /<time[^>]+dateTime=["']([^"']+)["'][^>]*>/i
+                ];
+
+                for (
+                  const pattern of
+                    timePatterns
+                ) {
+                  const result =
+                    articleHTML.match(
+                      pattern
+                    );
+
+                  if (
+                    result &&
+                    result[1]
+                  ) {
+                    return decodeHTML(
+                      result[1]
+                    ).trim();
+                  }
+                }
+
+
+                const jsonLDRegex =
+                  /<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
+
+                let jsonMatch;
+
+                while (
+                  (jsonMatch =
+                    jsonLDRegex.exec(
+                      articleHTML
+                    )) !== null
+                ) {
+                  try {
+                    const json =
+                      JSON.parse(
+                        jsonMatch[1]
+                      );
+
+                    const date =
+                      findDatePublished(
+                        json
+                      );
+
+                    if (
+                      date
+                    ) {
+                      return date;
+                    }
+
+                  } catch {
+                  }
+                }
+
+                return null;
+              }
+
+
+              function findDatePublished(
+                data
+              ) {
+                if (
+                  !data
+                ) {
+                  return null;
+                }
+
+                if (
+                  Array.isArray(
+                    data
+                  )
+                ) {
+                  for (
+                    const item of
+                      data
+                  ) {
+                    const result =
+                      findDatePublished(
+                        item
+                      );
+
+                    if (
+                      result
+                    ) {
+                      return result;
+                    }
+                  }
+
+                  return null;
+                }
+
+                if (
+                  typeof data !==
+                  "object"
+                ) {
+                  return null;
+                }
+
+                if (
+                  data.datePublished
+                ) {
+                  return String(
+                    data.datePublished
+                  );
+                }
+
+                if (
+                  data["@graph"]
+                ) {
+                  const result =
+                    findDatePublished(
+                      data["@graph"]
+                    );
+
+                  if (
+                    result
+                  ) {
+                    return result;
+                  }
+                }
+
+                for (
+                  const key of
+                    Object.keys(
+                      data
+                    )
+                ) {
+                  const value =
+                    data[key];
+
+                  if (
+                    value &&
+                    typeof value ===
+                    "object"
+                  ) {
+                    const result =
+                      findDatePublished(
+                        value
+                      );
+
+                    if (
+                      result
+                    ) {
+                      return result;
+                    }
+                  }
+                }
+
+                return null;
+              }
+
+
               const title =
                 getMeta(
                   "og:title"
@@ -376,7 +562,9 @@ async function handleVOA(
                 getMeta(
                   "twitter:title"
                 ) ||
-                article.title;
+                cleanText(
+                  article.title
+                );
 
               const description =
                 getMeta(
@@ -390,24 +578,23 @@ async function handleVOA(
                 );
 
               const published =
-                getMeta(
-                  "article:published_time"
-                ) ||
-                getMeta(
-                  "datePublished"
-                ) ||
-                getMeta(
-                  "date"
-                );
+                getPublishedDate();
 
               return {
                 source:
                   "VOA Persian",
                 language:
                   "fa",
-                title,
-                description,
-                published,
+                title:
+                  cleanText(
+                    title
+                  ),
+                description:
+                  cleanText(
+                    description
+                  ),
+                published:
+                  published,
                 url:
                   article.url
               };
@@ -419,7 +606,9 @@ async function handleVOA(
                 language:
                   "fa",
                 title:
-                  article.title,
+                  cleanText(
+                    article.title
+                  ),
                 description:
                   null,
                 published:
@@ -511,7 +700,7 @@ function normalizeURL(
 }
 
 
-function cleanHTML(
+function cleanText(
   text
 ) {
   if (!text) {
@@ -519,7 +708,7 @@ function cleanHTML(
   }
 
   return decodeHTML(
-    text
+    String(text)
       .replace(
         /<script[\s\S]*?<\/script>/gi,
         ""
@@ -533,10 +722,23 @@ function cleanHTML(
         " "
       )
       .replace(
+        /[\r\n\t]+/g,
+        " "
+      )
+      .replace(
         /\s+/g,
         " "
       )
       .trim()
+  );
+}
+
+
+function cleanHTML(
+  text
+) {
+  return cleanText(
+    text
   );
 }
 
@@ -548,7 +750,7 @@ function decodeHTML(
     return "";
   }
 
-  return text
+  return String(text)
     .replace(
       /&amp;/gi,
       "&"
@@ -636,7 +838,7 @@ async function handleIranInternational(
         {
           headers: {
             "User-Agent":
-              "Hosseinzadeh-Net/2.2",
+              "Hosseinzadeh-Net/2.3",
             "Accept":
               "text/html,application/xhtml+xml"
           }
@@ -740,7 +942,7 @@ async function handleIranInternational(
                   {
                     headers: {
                       "User-Agent":
-                        "Hosseinzadeh-Net/2.2"
+                        "Hosseinzadeh-Net/2.3"
                     }
                   }
                 );
@@ -839,9 +1041,16 @@ async function handleIranInternational(
                   "Iran International",
                 language:
                   "en",
-                title,
-                description,
-                published,
+                title:
+                  cleanText(
+                    title
+                  ),
+                description:
+                  cleanText(
+                    description
+                  ),
+                published:
+                  published,
                 url:
                   article.url
               };
