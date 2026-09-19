@@ -6,7 +6,7 @@ export default {
       return Response.json({
         service: "Hosseinzadeh-Net",
         status: "online",
-        version: "2.1.0"
+        version: "2.2.0"
       });
     }
 
@@ -149,7 +149,7 @@ async function handleVOA(
         {
           headers: {
             "User-Agent":
-              "Hosseinzadeh-Net/2.1",
+              "Hosseinzadeh-Net/2.2",
             "Accept":
               "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
             "Accept-Language":
@@ -176,7 +176,7 @@ async function handleVOA(
     const html =
       await response.text();
 
-    const articles = [];
+    const links = [];
     const seen =
       new Set();
 
@@ -192,11 +192,8 @@ async function handleVOA(
         )) !== null
     ) {
       let href =
-        match[1];
-
-      href =
         normalizeURL(
-          href
+          match[1]
         );
 
       if (!href) {
@@ -268,26 +265,178 @@ async function handleVOA(
         href
       );
 
-      articles.push({
-        source:
-          "VOA Persian",
-        language:
-          "fa",
+      links.push({
         title,
-        description:
-          null,
-        published:
-          null,
         url:
           href
       });
 
       if (
-        articles.length >= 20
+        links.length >= 20
       ) {
         break;
       }
     }
+
+    const articleResults =
+      await Promise.all(
+        links.map(
+          async (
+            article
+          ) => {
+            try {
+              const articleResponse =
+                await fetch(
+                  article.url,
+                  {
+                    headers: {
+                      "User-Agent":
+                        "Hosseinzadeh-Net/2.2",
+                      "Accept":
+                        "text/html,application/xhtml+xml"
+                    }
+                  }
+                );
+
+              if (
+                !articleResponse.ok
+              ) {
+                return {
+                  source:
+                    "VOA Persian",
+                  language:
+                    "fa",
+                  title:
+                    article.title,
+                  description:
+                    null,
+                  published:
+                    null,
+                  url:
+                    article.url
+                };
+              }
+
+              const articleHTML =
+                await articleResponse.text();
+
+              function getMeta(
+                property
+              ) {
+                const escaped =
+                  property.replace(
+                    /[.*+?^${}()|[\]\\]/g,
+                    "\\$&"
+                  );
+
+                const patterns = [
+                  new RegExp(
+                    `<meta[^>]+property=["']${escaped}["'][^>]+content=["']([^"']*)["']`,
+                    "i"
+                  ),
+                  new RegExp(
+                    `<meta[^>]+content=["']([^"']*)["'][^>]+property=["']${escaped}["']`,
+                    "i"
+                  ),
+                  new RegExp(
+                    `<meta[^>]+name=["']${escaped}["'][^>]+content=["']([^"']*)["']`,
+                    "i"
+                  ),
+                  new RegExp(
+                    `<meta[^>]+content=["']([^"']*)["'][^>]+name=["']${escaped}["']`,
+                    "i"
+                  )
+                ];
+
+                for (
+                  const pattern of
+                    patterns
+                ) {
+                  const result =
+                    articleHTML.match(
+                      pattern
+                    );
+
+                  if (
+                    result
+                  ) {
+                    return cleanHTML(
+                      result[1]
+                    );
+                  }
+                }
+
+                return null;
+              }
+
+              const title =
+                getMeta(
+                  "og:title"
+                ) ||
+                getMeta(
+                  "twitter:title"
+                ) ||
+                article.title;
+
+              const description =
+                getMeta(
+                  "og:description"
+                ) ||
+                getMeta(
+                  "description"
+                ) ||
+                getMeta(
+                  "twitter:description"
+                );
+
+              const published =
+                getMeta(
+                  "article:published_time"
+                ) ||
+                getMeta(
+                  "datePublished"
+                ) ||
+                getMeta(
+                  "date"
+                );
+
+              return {
+                source:
+                  "VOA Persian",
+                language:
+                  "fa",
+                title,
+                description,
+                published,
+                url:
+                  article.url
+              };
+
+            } catch {
+              return {
+                source:
+                  "VOA Persian",
+                language:
+                  "fa",
+                title:
+                  article.title,
+                description:
+                  null,
+                published:
+                  null,
+                url:
+                  article.url
+              };
+            }
+          }
+        )
+      );
+
+    const finalArticles =
+      articleResults.filter(
+        article =>
+          article !== null
+      );
 
     const result =
       Response.json({
@@ -298,10 +447,11 @@ async function handleVOA(
         language:
           "fa",
         count:
-          articles.length,
+          finalArticles.length,
         cached_for:
           "5 minutes",
-        articles
+        articles:
+          finalArticles
       }, {
         headers: {
           "Cache-Control":
@@ -353,24 +503,6 @@ function normalizeURL(
   if (markdownMatch) {
     url =
       markdownMatch[1];
-  }
-
-  if (
-    url.startsWith(
-      "https://ir.voanews.com"
-    )
-  ) {
-    return decodeHTML(
-      url
-    ).trim();
-  }
-
-  if (
-    url.startsWith("/")
-  ) {
-    return decodeHTML(
-      url
-    ).trim();
   }
 
   return decodeHTML(
@@ -504,7 +636,7 @@ async function handleIranInternational(
         {
           headers: {
             "User-Agent":
-              "Hosseinzadeh-Net/2.1",
+              "Hosseinzadeh-Net/2.2",
             "Accept":
               "text/html,application/xhtml+xml"
           }
@@ -608,7 +740,7 @@ async function handleIranInternational(
                   {
                     headers: {
                       "User-Agent":
-                        "Hosseinzadeh-Net/2.1"
+                        "Hosseinzadeh-Net/2.2"
                     }
                   }
                 );
