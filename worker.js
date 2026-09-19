@@ -6,20 +6,29 @@ export default {
       return Response.json({
         service: "Hosseinzadeh-Net",
         status: "online",
-        version: "2.0.0"
+        version: "2.1.0"
       });
     }
 
     if (url.pathname === "/news/iranintl") {
-      return handleIranInternational(request, ctx);
+      return handleIranInternational(
+        request,
+        ctx
+      );
     }
 
     if (url.pathname === "/news/voa") {
-      return handleVOA(request, ctx);
+      return handleVOA(
+        request,
+        ctx
+      );
     }
 
     if (url.pathname === "/news/all") {
-      return handleAllNews(request, ctx);
+      return handleAllNews(
+        request,
+        ctx
+      );
     }
 
     return Response.json({
@@ -32,29 +41,22 @@ export default {
 };
 
 
-async function handleAllNews(request, ctx) {
+async function handleAllNews(
+  request,
+  ctx
+) {
   try {
     const [
       iranIntlResponse,
       voaResponse
     ] = await Promise.all([
-      fetch(
-        new Request(
-          new URL(
-            "/news/iranintl",
-            request.url
-          ),
-          request
-        )
+      handleIranInternational(
+        request,
+        ctx
       ),
-      fetch(
-        new Request(
-          new URL(
-            "/news/voa",
-            request.url
-          ),
-          request
-        )
+      handleVOA(
+        request,
+        ctx
       )
     ]);
 
@@ -86,10 +88,16 @@ async function handleAllNews(request, ctx) {
     );
 
     return Response.json({
-      service: "Hosseinzadeh-Net",
-      source: "all",
-      count: articles.length,
-      cached_for: "5 minutes",
+      service:
+        "Hosseinzadeh-Net",
+      source:
+        "all",
+      count:
+        articles.length,
+      providers: [
+        "Iran International",
+        "VOA Persian"
+      ],
       articles
     }, {
       headers: {
@@ -98,10 +106,12 @@ async function handleAllNews(request, ctx) {
       }
     });
 
-  } catch {
+  } catch (error) {
     return Response.json({
-      service: "Hosseinzadeh-Net",
-      source: "all",
+      service:
+        "Hosseinzadeh-Net",
+      source:
+        "all",
       error:
         "Failed to combine news sources"
     }, {
@@ -124,136 +134,14 @@ async function handleVOA(
     );
 
   const cached =
-    await cache.match(cacheKey);
+    await cache.match(
+      cacheKey
+    );
 
   if (cached) {
     return cached;
   }
 
-  try {
-    /*
-     * VOA's official Persian RSS page lists
-     * the available RSS feeds.
-     *
-     * This URL is the Persian top-stories
-     * feed endpoint used by the VOA site.
-     */
-    const rssURL =
-      "https://ir.voanews.com/api/z-p7x9i1";
-
-    let response =
-      await fetch(
-        rssURL,
-        {
-          headers: {
-            "User-Agent":
-              "Hosseinzadeh-Net/2.0",
-            "Accept":
-              "application/rss+xml, application/xml, text/xml, */*"
-          }
-        }
-      );
-
-    /*
-     * If the RSS endpoint changes or returns
-     * something other than XML, fall back to
-     * the official VOA Persian homepage.
-     */
-    if (!response.ok) {
-      return await handleVOAHTML(
-        ctx,
-        cache,
-        cacheKey
-      );
-    }
-
-    const contentType =
-      response.headers.get(
-        "content-type"
-      ) || "";
-
-    const rss =
-      await response.text();
-
-    if (
-      !contentType.includes(
-        "xml"
-      ) &&
-      !rss.includes(
-        "<rss"
-      ) &&
-      !rss.includes(
-        "<feed"
-      )
-    ) {
-      return await handleVOAHTML(
-        ctx,
-        cache,
-        cacheKey
-      );
-    }
-
-    const articles =
-      parseRSS(
-        rss,
-        "VOA Persian",
-        "fa"
-      );
-
-    if (
-      articles.length === 0
-    ) {
-      return await handleVOAHTML(
-        ctx,
-        cache,
-        cacheKey
-      );
-    }
-
-    const result =
-      Response.json({
-        service:
-          "Hosseinzadeh-Net",
-        source:
-          "VOA Persian",
-        language:
-          "fa",
-        count:
-          articles.length,
-        cached_for:
-          "5 minutes",
-        articles
-      }, {
-        headers: {
-          "Cache-Control":
-            "public, max-age=300"
-        }
-      });
-
-    ctx.waitUntil(
-      cache.put(
-        cacheKey,
-        result.clone()
-      )
-    );
-
-    return result;
-
-  } catch {
-    return await handleVOAHTML(
-      ctx,
-      cache,
-      cacheKey
-    );
-  }
-}
-
-
-async function handleVOAHTML(
-  ctx,
-  cache,
-  cacheKey
-) {
   try {
     const response =
       await fetch(
@@ -261,7 +149,11 @@ async function handleVOAHTML(
         {
           headers: {
             "User-Agent":
-              "Hosseinzadeh-Net/2.0"
+              "Hosseinzadeh-Net/2.1",
+            "Accept":
+              "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language":
+              "fa-IR,fa;q=0.9,en;q=0.8"
           }
         }
       );
@@ -272,6 +164,8 @@ async function handleVOAHTML(
           "Hosseinzadeh-Net",
         source:
           "VOA Persian",
+        language:
+          "fa",
         error:
           `VOA returned HTTP ${response.status}`
       }, {
@@ -300,6 +194,15 @@ async function handleVOAHTML(
       let href =
         match[1];
 
+      href =
+        normalizeURL(
+          href
+        );
+
+      if (!href) {
+        continue;
+      }
+
       if (
         href.startsWith("/")
       ) {
@@ -325,6 +228,9 @@ async function handleVOAHTML(
         ) ||
         href.includes(
           "/navigation/"
+        ) ||
+        href.includes(
+          "/z/"
         )
       ) {
         continue;
@@ -339,7 +245,9 @@ async function handleVOAHTML(
       }
 
       if (
-        seen.has(href)
+        seen.has(
+          href
+        )
       ) {
         continue;
       }
@@ -351,12 +259,14 @@ async function handleVOAHTML(
 
       if (
         !title ||
-        title.length < 10
+        title.length < 8
       ) {
         continue;
       }
 
-      seen.add(href);
+      seen.add(
+        href
+      );
 
       articles.push({
         source:
@@ -408,12 +318,14 @@ async function handleVOAHTML(
 
     return result;
 
-  } catch {
+  } catch (error) {
     return Response.json({
       service:
         "Hosseinzadeh-Net",
       source:
         "VOA Persian",
+      language:
+        "fa",
       error:
         "Failed to fetch VOA Persian"
     }, {
@@ -423,164 +335,47 @@ async function handleVOAHTML(
 }
 
 
-function parseRSS(
-  xml,
-  source,
-  language
-) {
-  const articles = [];
-  const seen = new Set();
-
-  const itemRegex =
-    /<item\b[\s\S]*?<\/item>/gi;
-
-  const items =
-    xml.match(
-      itemRegex
-    ) || [];
-
-  for (
-    const item of items
-  ) {
-    const title =
-      getXMLValue(
-        item,
-        "title"
-      );
-
-    const description =
-      getXMLValue(
-        item,
-        "description"
-      );
-
-    const link =
-      getXMLValue(
-        item,
-        "link"
-      );
-
-    const published =
-      getXMLValue(
-        item,
-        "pubDate"
-      ) ||
-      getXMLValue(
-        item,
-        "published"
-      ) ||
-      getXMLValue(
-        item,
-        "updated"
-      );
-
-    if (
-      !title ||
-      !link
-    ) {
-      continue;
-    }
-
-    const decodedURL =
-      decodeHTML(
-        link
-      ).trim();
-
-    if (
-      seen.has(
-        decodedURL
-      )
-    ) {
-      continue;
-    }
-
-    seen.add(
-      decodedURL
-    );
-
-    articles.push({
-      source,
-      language,
-      title:
-        cleanHTML(
-          title
-        ),
-      description:
-        cleanHTML(
-          description
-        ),
-      published:
-        normalizeDate(
-          published
-        ),
-      url:
-        decodedURL
-    });
-
-    if (
-      articles.length >= 20
-    ) {
-      break;
-    }
-  }
-
-  return articles;
-}
-
-
-function getXMLValue(
-  xml,
-  tag
-) {
-  const regex =
-    new RegExp(
-      `<${tag}(?:\\s[^>]*)?>([\\s\\S]*?)<\\/${tag}>`,
-      "i"
-    );
-
-  const match =
-    xml.match(
-      regex
-    );
-
-  if (!match) {
-    return null;
-  }
-
-  return decodeHTML(
-    match[1]
-      .replace(
-        /<!\[CDATA\[([\s\S]*?)\]\]>/gi,
-        "$1"
-      )
-      .trim()
-  );
-}
-
-
-function normalizeDate(
+function normalizeURL(
   value
 ) {
   if (!value) {
     return null;
   }
 
-  const timestamp =
-    Date.parse(
-      value
+  let url =
+    value.trim();
+
+  const markdownMatch =
+    url.match(
+      /^\[.*?\]\((https?:\/\/[^)]+)\)$/
     );
 
-  if (
-    Number.isNaN(
-      timestamp
-    )
-  ) {
-    return value;
+  if (markdownMatch) {
+    url =
+      markdownMatch[1];
   }
 
-  return new Date(
-    timestamp
-  ).toISOString();
+  if (
+    url.startsWith(
+      "https://ir.voanews.com"
+    )
+  ) {
+    return decodeHTML(
+      url
+    ).trim();
+  }
+
+  if (
+    url.startsWith("/")
+  ) {
+    return decodeHTML(
+      url
+    ).trim();
+  }
+
+  return decodeHTML(
+    url
+  ).trim();
 }
 
 
@@ -657,6 +452,26 @@ function decodeHTML(
     .replace(
       /&#47;/gi,
       "/"
+    )
+    .replace(
+      /&#x([0-9a-f]+);/gi,
+      (_, hex) =>
+        String.fromCodePoint(
+          parseInt(
+            hex,
+            16
+          )
+        )
+    )
+    .replace(
+      /&#([0-9]+);/g,
+      (_, decimal) =>
+        String.fromCodePoint(
+          parseInt(
+            decimal,
+            10
+          )
+        )
     );
 }
 
@@ -689,7 +504,9 @@ async function handleIranInternational(
         {
           headers: {
             "User-Agent":
-              "Hosseinzadeh-Net/2.0"
+              "Hosseinzadeh-Net/2.1",
+            "Accept":
+              "text/html,application/xhtml+xml"
           }
         }
       );
@@ -700,6 +517,8 @@ async function handleIranInternational(
           "Hosseinzadeh-Net",
         source:
           "Iran International",
+        language:
+          "en",
         error:
           `Iran International returned HTTP ${response.status}`
       }, {
@@ -753,15 +572,20 @@ async function handleIranInternational(
       }
 
       if (
-        seen.has(href)
+        seen.has(
+          href
+        )
       ) {
         continue;
       }
 
-      seen.add(href);
+      seen.add(
+        href
+      );
 
       articles.push({
-        url: href
+        url:
+          href
       });
 
       if (
@@ -784,7 +608,7 @@ async function handleIranInternational(
                   {
                     headers: {
                       "User-Agent":
-                        "Hosseinzadeh-Net/2.0"
+                        "Hosseinzadeh-Net/2.1"
                     }
                   }
                 );
@@ -933,12 +757,14 @@ async function handleIranInternational(
 
     return result;
 
-  } catch {
+  } catch (error) {
     return Response.json({
       service:
         "Hosseinzadeh-Net",
       source:
         "Iran International",
+      language:
+        "en",
       error:
         "Failed to fetch Iran International"
     }, {
