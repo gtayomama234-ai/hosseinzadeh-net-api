@@ -1,3 +1,6 @@
 name = "hosseinzadeh-net"
 main = "worker.js"
 compatibility_date = "2026-09-18"
+
+[vars]
+GITHUB_REPO = "gtayomama234-ai/hosseinzadeh-net-api"
