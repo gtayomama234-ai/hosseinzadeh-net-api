@@ -6,7 +6,7 @@ export default {
       return Response.json({
         service: "Hosseinzadeh-Net",
         status: "online",
-        version: "2.3.0"
+        version: "3.0.0"
       });
     }
 
@@ -28,6 +28,20 @@ export default {
       return handleAllNews(
         request,
         ctx
+      );
+    }
+
+    if (url.pathname === "/games") {
+      return handleGames(env);
+    }
+
+    if (
+      url.pathname.startsWith("/games/") &&
+      url.pathname.endsWith(".torrent")
+    ) {
+      return handleTorrent(
+        request,
+        env
       );
     }
 
@@ -70,22 +84,6 @@ async function handleAllNews(
       ...(iranIntl.articles || []),
       ...(voa.articles || [])
     ];
-
-    articles.sort(
-      (a, b) => {
-        const aTime =
-          Date.parse(
-            a.published || ""
-          ) || 0;
-
-        const bTime =
-          Date.parse(
-            b.published || ""
-          ) || 0;
-
-        return bTime - aTime;
-      }
-    );
 
     return Response.json({
       service:
@@ -130,7 +128,7 @@ async function handleVOA(
 
   const cacheKey =
     new Request(
-      "https://hosseinzadeh-net-api-cache/news/voa"
+      "https://hosseinzadeh-net-api-cache/news/voa-v3"
     );
 
   const cached =
@@ -149,7 +147,7 @@ async function handleVOA(
         {
           headers: {
             "User-Agent":
-              "Hosseinzadeh-Net/2.3",
+              "Hosseinzadeh-Net/3.0",
             "Accept":
               "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
             "Accept-Language":
@@ -291,7 +289,7 @@ async function handleVOA(
                   {
                     headers: {
                       "User-Agent":
-                        "Hosseinzadeh-Net/2.3",
+                        "Hosseinzadeh-Net/3.0",
                       "Accept":
                         "text/html,application/xhtml+xml"
                     }
@@ -311,8 +309,6 @@ async function handleVOA(
                       article.title
                     ),
                   description:
-                    null,
-                  published:
                     null,
                   url:
                     article.url
@@ -371,190 +367,6 @@ async function handleVOA(
                 return null;
               }
 
-
-              function getPublishedDate() {
-                const metaDate =
-                  getMeta(
-                    "article:published_time"
-                  ) ||
-                  getMeta(
-                    "datePublished"
-                  ) ||
-                  getMeta(
-                    "date"
-                  ) ||
-                  getMeta(
-                    "publishdate"
-                  ) ||
-                  getMeta(
-                    "pubdate"
-                  ) ||
-                  getMeta(
-                    "timestamp"
-                  );
-
-                if (
-                  metaDate
-                ) {
-                  return metaDate;
-                }
-
-
-                const timePatterns = [
-                  /<time[^>]+datetime=["']([^"']+)["'][^>]*>/i,
-                  /<time[^>]+dateTime=["']([^"']+)["'][^>]*>/i
-                ];
-
-                for (
-                  const pattern of
-                    timePatterns
-                ) {
-                  const result =
-                    articleHTML.match(
-                      pattern
-                    );
-
-                  if (
-                    result &&
-                    result[1]
-                  ) {
-                    return decodeHTML(
-                      result[1]
-                    ).trim();
-                  }
-                }
-
-
-                const jsonLDRegex =
-                  /<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
-
-                let jsonMatch;
-
-                while (
-                  (jsonMatch =
-                    jsonLDRegex.exec(
-                      articleHTML
-                    )) !== null
-                ) {
-                  try {
-                    const json =
-                      JSON.parse(
-                        jsonMatch[1]
-                      );
-
-                    const date =
-                      findDatePublished(
-                        json
-                      );
-
-                    if (
-                      date
-                    ) {
-                      return date;
-                    }
-
-                  } catch {
-                  }
-                }
-
-                return null;
-              }
-
-
-              function findDatePublished(
-                data
-              ) {
-                if (
-                  !data
-                ) {
-                  return null;
-                }
-
-                if (
-                  Array.isArray(
-                    data
-                  )
-                ) {
-                  for (
-                    const item of
-                      data
-                  ) {
-                    const result =
-                      findDatePublished(
-                        item
-                      );
-
-                    if (
-                      result
-                    ) {
-                      return result;
-                    }
-                  }
-
-                  return null;
-                }
-
-                if (
-                  typeof data !==
-                  "object"
-                ) {
-                  return null;
-                }
-
-                if (
-                  data.datePublished
-                ) {
-                  return String(
-                    data.datePublished
-                  );
-                }
-
-                if (
-                  data["@graph"]
-                ) {
-                  const result =
-                    findDatePublished(
-                      data["@graph"]
-                    );
-
-                  if (
-                    result
-                  ) {
-                    return result;
-                  }
-                }
-
-                for (
-                  const key of
-                    Object.keys(
-                      data
-                    )
-                ) {
-                  const value =
-                    data[key];
-
-                  if (
-                    value &&
-                    typeof value ===
-                    "object"
-                  ) {
-                    const result =
-                      findDatePublished(
-                        value
-                      );
-
-                    if (
-                      result
-                    ) {
-                      return result;
-                    }
-                  }
-                }
-
-                return null;
-              }
-
-
               const title =
                 getMeta(
                   "og:title"
@@ -577,9 +389,6 @@ async function handleVOA(
                   "twitter:description"
                 );
 
-              const published =
-                getPublishedDate();
-
               return {
                 source:
                   "VOA Persian",
@@ -593,8 +402,6 @@ async function handleVOA(
                   cleanText(
                     description
                   ),
-                published:
-                  published,
                 url:
                   article.url
               };
@@ -610,8 +417,6 @@ async function handleVOA(
                     article.title
                   ),
                 description:
-                  null,
-                published:
                   null,
                 url:
                   article.url
@@ -670,6 +475,500 @@ async function handleVOA(
     }, {
       status: 502
     });
+  }
+}
+
+
+async function handleIranInternational(
+  request,
+  ctx
+) {
+  const cache =
+    caches.default;
+
+  const cacheKey =
+    new Request(
+      "https://hosseinzadeh-net-api-cache/news/iranintl-v3"
+    );
+
+  const cached =
+    await cache.match(
+      cacheKey
+    );
+
+  if (cached) {
+    return cached;
+  }
+
+  try {
+    const response =
+      await fetch(
+        "https://www.iranintl.com/en/latest",
+        {
+          headers: {
+            "User-Agent":
+              "Hosseinzadeh-Net/3.0",
+            "Accept":
+              "text/html,application/xhtml+xml"
+          }
+        }
+      );
+
+    if (!response.ok) {
+      return Response.json({
+        service:
+          "Hosseinzadeh-Net",
+        source:
+          "Iran International",
+        language:
+          "en",
+        error:
+          `Iran International returned HTTP ${response.status}`
+      }, {
+        status: 502
+      });
+    }
+
+    const html =
+      await response.text();
+
+    const articles = [];
+    const seen =
+      new Set();
+
+    const linkRegex =
+      /<a[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi;
+
+    let match;
+
+    while (
+      (match =
+        linkRegex.exec(
+          html
+        )) !== null
+    ) {
+      let href =
+        match[1];
+
+      if (
+        href.startsWith("/")
+      ) {
+        href =
+          "https://www.iranintl.com" +
+          href;
+      }
+
+      if (
+        !href.startsWith(
+          "https://www.iranintl.com/en/"
+        )
+      ) {
+        continue;
+      }
+
+      if (
+        !/^https:\/\/www\.iranintl\.com\/en\/\d{10,}$/.test(
+          href
+        )
+      ) {
+        continue;
+      }
+
+      if (
+        seen.has(
+          href
+        )
+      ) {
+        continue;
+      }
+
+      seen.add(
+        href
+      );
+
+      articles.push({
+        url:
+          href
+      });
+
+      if (
+        articles.length >= 20
+      ) {
+        break;
+      }
+    }
+
+    const articleResults =
+      await Promise.all(
+        articles.map(
+          async (
+            article
+          ) => {
+            try {
+              const articleResponse =
+                await fetch(
+                  article.url,
+                  {
+                    headers: {
+                      "User-Agent":
+                        "Hosseinzadeh-Net/3.0"
+                    }
+                  }
+                );
+
+              if (
+                !articleResponse.ok
+              ) {
+                return null;
+              }
+
+              const articleHTML =
+                await articleResponse.text();
+
+              function getMeta(
+                property
+              ) {
+                const escaped =
+                  property.replace(
+                    /[.*+?^${}()|[\]\\]/g,
+                    "\\$&"
+                  );
+
+                const patterns = [
+                  new RegExp(
+                    `<meta[^>]+property=["']${escaped}["'][^>]+content=["']([^"']*)["']`,
+                    "i"
+                  ),
+                  new RegExp(
+                    `<meta[^>]+content=["']([^"']*)["'][^>]+property=["']${escaped}["']`,
+                    "i"
+                  ),
+                  new RegExp(
+                    `<meta[^>]+name=["']${escaped}["'][^>]+content=["']([^"']*)["']`,
+                    "i"
+                  ),
+                  new RegExp(
+                    `<meta[^>]+content=["']([^"']*)["'][^>]+name=["']${escaped}["']`,
+                    "i"
+                  )
+                ];
+
+                for (
+                  const pattern of
+                    patterns
+                ) {
+                  const result =
+                    articleHTML.match(
+                      pattern
+                    );
+
+                  if (
+                    result
+                  ) {
+                    return decodeHTML(
+                      result[1]
+                    ).trim();
+                  }
+                }
+
+                return null;
+              }
+
+              const title =
+                getMeta(
+                  "og:title"
+                ) ||
+                getMeta(
+                  "twitter:title"
+                );
+
+              const description =
+                getMeta(
+                  "og:description"
+                ) ||
+                getMeta(
+                  "description"
+                ) ||
+                getMeta(
+                  "twitter:description"
+                );
+
+              if (!title) {
+                return null;
+              }
+
+              return {
+                source:
+                  "Iran International",
+                language:
+                  "en",
+                title:
+                  cleanText(
+                    title
+                  ),
+                description:
+                  cleanText(
+                    description
+                  ),
+                url:
+                  article.url
+              };
+
+            } catch {
+              return null;
+            }
+          }
+        )
+      );
+
+    const finalArticles =
+      articleResults.filter(
+        article =>
+          article !== null
+      );
+
+    const result =
+      Response.json({
+        service:
+          "Hosseinzadeh-Net",
+        source:
+          "Iran International",
+        language:
+          "en",
+        count:
+          finalArticles.length,
+        cached_for:
+          "5 minutes",
+        articles:
+          finalArticles
+      }, {
+        headers: {
+          "Cache-Control":
+            "public, max-age=300"
+        }
+      });
+
+    ctx.waitUntil(
+      cache.put(
+        cacheKey,
+        result.clone()
+      )
+    );
+
+    return result;
+
+  } catch (error) {
+    return Response.json({
+      service:
+        "Hosseinzadeh-Net",
+      source:
+        "Iran International",
+      language:
+        "en",
+      error:
+        "Failed to fetch Iran International"
+    }, {
+      status: 502
+    });
+  }
+}
+
+
+async function handleGames(
+  env
+) {
+  try {
+    const repo =
+      env.GITHUB_REPO;
+
+    if (!repo) {
+      return Response.json({
+        service:
+          "Hosseinzadeh-Net",
+        source:
+          "torrent-games",
+        error:
+          "GITHUB_REPO is not configured"
+      }, {
+        status: 500
+      });
+    }
+
+    const response =
+      await fetch(
+        `https://api.github.com/repos/${repo}/contents/repository/torrents`,
+        {
+          headers: {
+            "User-Agent":
+              "Hosseinzadeh-Net",
+            "Accept":
+              "application/vnd.github+json"
+          }
+        }
+      );
+
+    if (!response.ok) {
+      return Response.json({
+        service:
+          "Hosseinzadeh-Net",
+        source:
+          "torrent-games",
+        error:
+          `GitHub returned HTTP ${response.status}`
+      }, {
+        status: 502
+      });
+    }
+
+    const files =
+      await response.json();
+
+    const games =
+      files
+        .filter(
+          file =>
+            file.type === "file" &&
+            file.name
+              .toLowerCase()
+              .endsWith(".torrent")
+        )
+        .map(
+          file => ({
+            name:
+              file.name.replace(
+                /\.torrent$/i,
+                ""
+              ),
+            filename:
+              file.name,
+            torrent:
+              `/games/${encodeURIComponent(
+                file.name
+              )}`
+          })
+        );
+
+    return Response.json({
+      service:
+        "Hosseinzadeh-Net",
+      source:
+        "torrent-games",
+      count:
+        games.length,
+      games
+    }, {
+      headers: {
+        "Cache-Control":
+          "public, max-age=300"
+      }
+    });
+
+  } catch (error) {
+    return Response.json({
+      service:
+        "Hosseinzadeh-Net",
+      source:
+        "torrent-games",
+      error:
+        "Failed to load torrent game index"
+    }, {
+      status: 502
+    });
+  }
+}
+
+
+async function handleTorrent(
+  request,
+  env
+) {
+  try {
+    const url =
+      new URL(
+        request.url
+      );
+
+    const filename =
+      decodeURIComponent(
+        url.pathname.substring(
+          "/games/".length
+        )
+      );
+
+    if (
+      !filename ||
+      !filename
+        .toLowerCase()
+        .endsWith(".torrent") ||
+      filename.includes("/") ||
+      filename.includes("\\") ||
+      filename.includes("..")
+    ) {
+      return new Response(
+        "Invalid torrent filename",
+        {
+          status: 400
+        }
+      );
+    }
+
+    const repo =
+      env.GITHUB_REPO;
+
+    if (!repo) {
+      return new Response(
+        "GITHUB_REPO is not configured",
+        {
+          status: 500
+        }
+      );
+    }
+
+    const torrentURL =
+      `https://raw.githubusercontent.com/${repo}/main/repository/torrents/${encodeURIComponent(filename)}`;
+
+    const response =
+      await fetch(
+        torrentURL,
+        {
+          headers: {
+            "User-Agent":
+              "Hosseinzadeh-Net"
+          }
+        }
+      );
+
+    if (!response.ok) {
+      return new Response(
+        "Torrent not found",
+        {
+          status: 404
+        }
+      );
+    }
+
+    return new Response(
+      response.body,
+      {
+        status: 200,
+        headers: {
+          "Content-Type":
+            "application/x-bittorrent",
+          "Content-Disposition":
+            `attachment; filename="${filename}"`,
+          "Cache-Control":
+            "public, max-age=3600"
+        }
+      }
+    );
+
+  } catch (error) {
+    return new Response(
+      "Failed to fetch torrent",
+      {
+        status: 502
+      }
+    );
   }
 }
 
@@ -807,309 +1106,4 @@ function decodeHTML(
           )
         )
     );
-}
-
-
-async function handleIranInternational(
-  request,
-  ctx
-) {
-  const cache =
-    caches.default;
-
-  const cacheKey =
-    new Request(
-      "https://hosseinzadeh-net-api-cache/news/iranintl"
-    );
-
-  const cached =
-    await cache.match(
-      cacheKey
-    );
-
-  if (cached) {
-    return cached;
-  }
-
-  try {
-    const response =
-      await fetch(
-        "https://www.iranintl.com/en/latest",
-        {
-          headers: {
-            "User-Agent":
-              "Hosseinzadeh-Net/2.3",
-            "Accept":
-              "text/html,application/xhtml+xml"
-          }
-        }
-      );
-
-    if (!response.ok) {
-      return Response.json({
-        service:
-          "Hosseinzadeh-Net",
-        source:
-          "Iran International",
-        language:
-          "en",
-        error:
-          `Iran International returned HTTP ${response.status}`
-      }, {
-        status: 502
-      });
-    }
-
-    const html =
-      await response.text();
-
-    const articles = [];
-    const seen =
-      new Set();
-
-    const linkRegex =
-      /<a[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi;
-
-    let match;
-
-    while (
-      (match =
-        linkRegex.exec(
-          html
-        )) !== null
-    ) {
-      let href =
-        match[1];
-
-      if (
-        href.startsWith("/")
-      ) {
-        href =
-          "https://www.iranintl.com" +
-          href;
-      }
-
-      if (
-        !href.startsWith(
-          "https://www.iranintl.com/en/"
-        )
-      ) {
-        continue;
-      }
-
-      if (
-        !/^https:\/\/www\.iranintl\.com\/en\/\d{10,}$/.test(
-          href
-        )
-      ) {
-        continue;
-      }
-
-      if (
-        seen.has(
-          href
-        )
-      ) {
-        continue;
-      }
-
-      seen.add(
-        href
-      );
-
-      articles.push({
-        url:
-          href
-      });
-
-      if (
-        articles.length >= 20
-      ) {
-        break;
-      }
-    }
-
-    const articleResults =
-      await Promise.all(
-        articles.map(
-          async (
-            article
-          ) => {
-            try {
-              const articleResponse =
-                await fetch(
-                  article.url,
-                  {
-                    headers: {
-                      "User-Agent":
-                        "Hosseinzadeh-Net/2.3"
-                    }
-                  }
-                );
-
-              if (
-                !articleResponse.ok
-              ) {
-                return null;
-              }
-
-              const articleHTML =
-                await articleResponse.text();
-
-              function getMeta(
-                property
-              ) {
-                const escaped =
-                  property.replace(
-                    /[.*+?^${}()|[\]\\]/g,
-                    "\\$&"
-                  );
-
-                const patterns = [
-                  new RegExp(
-                    `<meta[^>]+property=["']${escaped}["'][^>]+content=["']([^"']*)["']`,
-                    "i"
-                  ),
-                  new RegExp(
-                    `<meta[^>]+content=["']([^"']*)["'][^>]+property=["']${escaped}["']`,
-                    "i"
-                  ),
-                  new RegExp(
-                    `<meta[^>]+name=["']${escaped}["'][^>]+content=["']([^"']*)["']`,
-                    "i"
-                  ),
-                  new RegExp(
-                    `<meta[^>]+content=["']([^"']*)["'][^>]+name=["']${escaped}["']`,
-                    "i"
-                  )
-                ];
-
-                for (
-                  const pattern of
-                    patterns
-                ) {
-                  const result =
-                    articleHTML.match(
-                      pattern
-                    );
-
-                  if (
-                    result
-                  ) {
-                    return decodeHTML(
-                      result[1]
-                    ).trim();
-                  }
-                }
-
-                return null;
-              }
-
-              const title =
-                getMeta(
-                  "og:title"
-                ) ||
-                getMeta(
-                  "twitter:title"
-                );
-
-              const description =
-                getMeta(
-                  "og:description"
-                ) ||
-                getMeta(
-                  "description"
-                ) ||
-                getMeta(
-                  "twitter:description"
-                );
-
-              const published =
-                getMeta(
-                  "article:published_time"
-                ) ||
-                getMeta(
-                  "datePublished"
-                );
-
-              if (!title) {
-                return null;
-              }
-
-              return {
-                source:
-                  "Iran International",
-                language:
-                  "en",
-                title:
-                  cleanText(
-                    title
-                  ),
-                description:
-                  cleanText(
-                    description
-                  ),
-                published:
-                  published,
-                url:
-                  article.url
-              };
-
-            } catch {
-              return null;
-            }
-          }
-        )
-      );
-
-    const finalArticles =
-      articleResults.filter(
-        article =>
-          article !== null
-      );
-
-    const result =
-      Response.json({
-        service:
-          "Hosseinzadeh-Net",
-        source:
-          "Iran International",
-        language:
-          "en",
-        count:
-          finalArticles.length,
-        cached_for:
-          "5 minutes",
-        articles:
-          finalArticles
-      }, {
-        headers: {
-          "Cache-Control":
-            "public, max-age=300"
-        }
-      });
-
-    ctx.waitUntil(
-      cache.put(
-        cacheKey,
-        result.clone()
-      )
-    );
-
-    return result;
-
-  } catch (error) {
-    return Response.json({
-      service:
-        "Hosseinzadeh-Net",
-      source:
-        "Iran International",
-      language:
-        "en",
-      error:
-        "Failed to fetch Iran International"
-    }, {
-      status: 502
-    });
-  }
 }
